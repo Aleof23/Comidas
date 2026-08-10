@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Macros IA</title>
+    <style>
+        :root {
+            --primary: #28a745;
+            --primary-hover: #218838;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h2 { margin-bottom: 5px; }
+        .subtitle { color: #666; margin-bottom: 20px; font-size: 0.9em; }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }
+        
+        button, .file-upload-label {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+            display: inline-block;
+        }
+        button:hover, .file-upload-label:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        input[type="file"] { display: none; }
+        
+        #videoElement, #previewImage {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 8px;
+            display: none;
+            margin: 10px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #canvasElement { display: none; }
+
+        .result-box {
+            background-color: #e9f7ef;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+            display: none;
+        }
+        
+        .macros-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .macro-item {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .history-table th, .history-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        .history-table th { background-color: #f1f1f1; }
+        #clearHistory { background-color: #dc3545; margin-top: 10px; font-size: 12px; padding: 8px 12px;}
+        #clearHistory:hover { background-color: #c82333; }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <h2>📸 Nutri-IA Personal</h2>
+    <p class="subtitle">Analiza tu comida y guarda tu registro diario</p>
+
+    <!-- Sección de Captura -->
+    <div class="card">
+        <div class="controls">
+            <button id="startCameraBtn">📷 Abrir Cámara</button>
+            <button id="captureBtn" style="display:none;">🔴 Tomar Foto</button>
+            <label class="file-upload-label">
+                📁 Subir Foto
+                <input type="file" id="imageInput" accept="image/*">
+            </label>
+        </div>
+
+        <video id="videoElement" autoplay playsinline></video>
+        <canvas id="canvasElement"></canvas>
+        <img id="previewImage" alt="Vista previa" />
+
+        <button id="analyzeBtn" style="display:none; width: 100%; margin-top: 15px;">Analizar Comida</button>
+    </div>
+
+    <!-- Sección de Resultados -->
+    <div id="result" class="result-box">
+        <h3 style="margin-top:0;">Resultado: <span id="alimento"></span></h3>
+        <div class="macros-grid">
+            <div class="macro-item">🔥 Calorías<br><span id="calorias">0</span> kcal</div>
+            <div class="macro-item">🥩 Proteínas<br><span id="proteinas">0</span> g</div>
+            <div class="macro-item">🍚 Carbos<br><span id="carbos">0</span> g</div>
+            <div class="macro-item">🥑 Grasas<br><span id="grasas">0</span> g</div>
+        </div>
+    </div>
+
+    <!-- Sección de Historial -->
+    <div class="card" style="margin-top: 20px;">
+        <h3>Mi Historial</h3>
+        <div style="overflow-x:auto;">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Alimento</th>
+                        <th>Kcal</th>
+                        <th>Prot.</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody">
+                    <!-- Filas generadas por JS -->
+                </tbody>
+            </table>
+        </div>
+        <button id="clearHistory">🗑️ Borrar Historial</button>
+    </div>
+
+    <script>
+        // ---------------- CONFIGURACIÓN ----------------
+        const API_KEY = 'PEGAR_TU_API_KEY_AQUI'; 
+        
+        // El prompt estricto para que la IA devuelva solo el objeto JSON
+        const PROMPT = "Analiza esta imagen de comida. Estima el tamaño de la porción y devuelve EXCLUSIVAMENTE un objeto JSON válido con los siguientes campos exactos (sin añadir texto extra): alimento_principal, calorias_totales, proteinas_g, carbohidratos_g, grasas_g.";
+        // -----------------------------------------------
+
+        // Elementos del DOM
+        const video = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvasElement');
+        const preview = document.getElementById('previewImage');
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const imageInput = document.getElementById('imageInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultDiv = document.getElementById('result');
+        const historyBody = document.getElementById('historyBody');
+        const clearHistoryBtn = document.getElementById('clearHistory');
+
+        let base64Image = "";
+        let stream = null;
+        let history = JSON.parse(localStorage.getItem('foodHistory')) || [];
+
+        // Inicializar Historial
+        renderHistory();
+
+        // 1. Funcionalidad de la Cámara
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                preview.style.display = 'none';
+                captureBtn.style.display = 'inline-block';
+                startCameraBtn.style.display = 'none';
+                analyzeBtn.style.display = 'none';
+            } catch (err) {
+                alert("No se pudo acceder a la cámara. Asegúrate de dar permisos o usar HTTPS.");
+                console.error(err);
+            }
+        });
+
+        captureBtn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Convertir a base64 y detener cámara
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            base64Image = imageDataUrl.split(',')[1];
+            
+            preview.src = imageDataUrl;
+            preview.style.display = 'block';
+            video.style.display = 'none';
+            captureBtn.style.display = 'none';
+            startCameraBtn.style.display = 'inline-block';
+            analyzeBtn.style.display = 'block';
+
+            // Apagar la cámara web
+            stream.getTracks().forEach(track => track.stop());
+        });
+
+        // 2. Funcionalidad de Subir Archivo
+        imageInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    video.style.display = 'none';
+                    captureBtn.style.display = 'none';
+                    startCameraBtn.style.display = 'inline-block';
+                    analyzeBtn.style.display = 'block';
+                    
+                    base64Image = e.target.result.split(',')[1];
+                    
+                    if(stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 3. Conexión con IA (Google Gemini)
+        analyzeBtn.addEventListener('click', async function() {
+            if (!base64Image) {
+                alert("Por favor, captura o sube una imagen primero.");
+                return;
+            }
+
+            analyzeBtn.innerHTML = '<span class="loader"></span> Analizando...';
+            analyzeBtn.disabled = true;
+            resultDiv.style.display = 'none';
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+            
+            const requestBody = {
+                contents: [{
+                    parts: [
+                        { text: PROMPT },
+                        { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                    ]
+                }]
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+
+                // Limpiar la respuesta de Gemini (eliminar etiquetas markdown ```json )
+                let jsonString = data.candidates[0].content.parts[0].text;
+                jsonString = jsonString.replace(/```json/gi, "").replace(/```/g, "").trim();
+                
+                const macros = JSON.parse(jsonString);
+
+                // Mostrar en pantalla
+                document.getElementById('alimento').innerText = macros.alimento_principal;
+                document.getElementById('calorias').innerText = macros.calorias_totales;
+                document.getElementById('proteinas').innerText = macros.proteinas_g;
+                document.getElementById('carbos').innerText = macros.carbohidratos_g;
+                document.getElementById('grasas').innerText = macros.grasas_g;
+
+                resultDiv.style.display = 'block';
+
+                // Guardar en historial
+                saveToHistory(macros);
+
+            } catch (error) {
+                console.error("Error completo:", error);
+                alert("Hubo un error al analizar la imagen o la IA no devolvió un formato válido.");
+            } finally {
+                analyzeBtn.innerHTML = 'Analizar Comida';
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        // 4. Funciones de Historial (LocalStorage)
+        function saveToHistory(macros) {
+            history.unshift({
+                alimento: macros.alimento_principal,
+                calorias: macros.calorias_totales,
+                proteinas: macros.proteinas_g,
+                fecha: new Date().toLocaleString()
+            });
+            
+            // Mantener solo los últimos 10 registros
+            if(history.length > 10) history.pop();
+            
+            localStorage.setItem('foodHistory', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            historyBody.innerHTML = '';
+            if (history.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No hay registros aún</td></tr>';
+                return;
+            }
+            
+            history.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.alimento}</td>
+                    <td>${item.calorias}</td>
+                    <td>${item.proteinas}g</td>
+                `;
+                historyBody.appendChild(tr);
+            });
+        }
+
+        clearHistoryBtn.addEventListener('click', () => {
+            if(confirm('¿Estás seguro de borrar tu historial?')) {
+                history = [];
+                localStorage.removeItem('foodHistory');
+                renderHistory();
+            }
+        });
+    </script>
+</body>
+</html>
